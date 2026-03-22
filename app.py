@@ -1,6 +1,7 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
+from io import BytesIO
 import os
 
 # --- 1. ADATBÁZIS INICIALIZÁLÁSA ---
@@ -37,14 +38,11 @@ with col_menu1:
         st.write("A fájl oszlopai: **kod, nev, egyseg, anyag, norma** (pontosvesszővel elválasztva)")
         feltoltott_fajl = st.file_uploader("Válassz ki egy CSV fájlt", type="csv")
         
-        # Ez a rész lett javítva, hogy ne legyen NameError
         if feltoltott_fajl is not None:
             try:
-                # Beolvassuk és rögtön szűrjük az oszlopokat
                 df = pd.read_csv(feltoltott_fajl, sep=";")
                 kell_oszlopok = ['kod', 'nev', 'egyseg', 'anyag', 'norma']
                 
-                # Ellenőrizzük, megvannak-e a szükséges oszlopok
                 if all(col in df.columns for col in kell_oszlopok):
                     uj_adatok = df[kell_oszlopok].copy()
                     
@@ -55,9 +53,9 @@ with col_menu1:
                         st.success(f"Sikeresen hozzáadva {len(uj_adatok)} új tétel!")
                         st.rerun()
                 else:
-                    st.error("A CSV fájl oszlopnevei nem megfelelőek! Használd a kért fejlécet.")
+                    st.error("Hiányzó oszlopok! Kell: kod, nev, egyseg, anyag, norma")
             except Exception as e:
-                st.error(f"Hiba a fájl feldolgozásakor: {e}")
+                st.error(f"Hiba: {e}")
 
 with col_menu2:
     with st.expander("➕ EGYEDI TÉTEL HOZZÁADÁSA"):
@@ -89,8 +87,8 @@ if not normak_df.empty:
         st.write("##")
         if st.button("📥 Hozzáadás"):
             t_id = normak_df[normak_df['nev'] == kiv_nev]['id'].values[0]
-            c = conn.cursor()
-            c.execute("INSERT INTO projekt_tetelek (norma_id, mennyiseg) VALUES (?,?)", (int(t_id), menny))
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO projekt_tetelek (norma_id, mennyiseg) VALUES (?,?)", (int(t_id), menny))
             conn.commit()
             st.rerun()
 
@@ -113,23 +111,6 @@ if not projekt_df.empty:
     col_x.metric("Összes anyagköltség", f"{projekt_df['ossz_anyag'].sum():,.0f} Ft".replace(",", " "))
     col_y.metric("Összes munkaóra", f"{projekt_df['ossz_munkaora'].sum():.2f} óra")
     
-    if st.button("🗑️ Projekt ürítése"):
-        conn = sqlite3.connect('terc_vegleges.db')
-        conn.execute("DELETE FROM projekt_tetelek")
-        conn.commit()
-        conn.close()
-        st.rerun()
-else:
-    st.info("Még nincsenek tételek a projektben.")
-
-if not projekt_df.empty:
-    st.subheader("📊 Projekt tételei")
-    st.dataframe(projekt_df, use_container_width=True)
-    
-    col_x, col_y = st.columns(2)
-    col_x.metric("Összes anyagköltség", f"{projekt_df['ossz_anyag'].sum():,.0f} Ft".replace(",", " "))
-    col_y.metric("Összes munkaóra", f"{projekt_df['ossz_munkaora'].sum():.2f} óra")
-    
     # --- EXPORT GOMB ---
     buffer = BytesIO()
     with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
@@ -141,7 +122,6 @@ if not projekt_df.empty:
         file_name="terc_koltsegvetes.xlsx",
         mime="application/vnd.ms-excel"
     )
-    # ------------------
 
     if st.button("🗑️ Projekt ürítése"):
         conn = sqlite3.connect('terc_vegleges.db')
@@ -149,3 +129,5 @@ if not projekt_df.empty:
         conn.commit()
         conn.close()
         st.rerun()
+else:
+    st.info("Még nincsenek tételek a projektben.")
