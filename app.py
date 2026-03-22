@@ -32,13 +32,15 @@ st.title("🏗️ Digitális TERC - Költségvetés Készítő")
 # --- 3. TÖMEGES FELTÖLTÉS ÉS ÚJ TÉTEL ---
 col_menu1, col_menu2 = st.columns(2)
 
-with col_menu1:
-    with st.expander("📥 TÖMEGES FELTÖLTÉS (Excel/CSV fájlból)"):
-        st.write("A fájl oszlopai: **kod, nev, egyseg, anyag, norma** (pontosvesszővel elválasztva)")
-        feltoltott_fajl = st.file_uploader("Válassz ki egy CSV fájlt", type="csv")
-        if feltoltott_fajl is not None:
+if feltoltott_fajl is not None:
             try:
-                uj_adatok = pd.read_csv(feltoltott_fajl, sep=";")
+                # Beolvassuk a CSV-t
+                df = pd.read_csv(feltoltott_fajl, sep=";")
+                
+                # CSAK a nekünk kellő oszlopokat tartjuk meg, a többit eldobjuk
+                kell_oszlopok = ['kod', 'nev', 'egyseg', 'anyag', 'norma']
+                uj_adatok = df[kell_oszlopok].copy()
+                
                 if st.button("🚀 Importálás indítása"):
                     conn = sqlite3.connect('terc_vegleges.db')
                     uj_adatok.to_sql('normak', conn, if_exists='append', index=False)
@@ -46,7 +48,7 @@ with col_menu1:
                     st.success(f"Sikeresen hozzáadva {len(uj_adatok)} új tétel!")
                     st.rerun()
             except Exception as e:
-                st.error(f"Hiba a fájl feldolgozásakor: {e}")
+                st.error(f"Hiba: {e}")
 
 with col_menu2:
     with st.expander("➕ EGYEDI TÉTEL HOZZÁADÁSA"):
