@@ -6,25 +6,12 @@ import os
 
 # --- 1. ADATBÁZIS INICIALIZÁLÁSA ---
 def init_db():
-    conn = sqlite3.connect('terc_oktatas.db', check_same_thread=False)
+    conn = sqlite3.connect('terc_vegleges.db', check_same_thread=False)
     c = conn.cursor()
-    
-    # Normagyűjtemény tábla
     c.execute('''CREATE TABLE IF NOT EXISTS normak 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                  kod TEXT, 
-                  nev TEXT, 
-                  egyseg TEXT, 
-                  anyag REAL, 
-                  norma REAL)''')
-    
-    # Projekt tételei tábla
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, kod TEXT, nev TEXT, egyseg TEXT, anyag REAL, norma REAL)''')
     c.execute('''CREATE TABLE IF NOT EXISTS projekt_tetelek 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                  norma_id INTEGER, 
-                  mennyiseg REAL)''')
-
-    # Alapértelmezett adatok feltöltése, ha üres
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, norma_id INTEGER, mennyiseg REAL)''')
     c.execute("SELECT count(*) FROM normak")
     if c.fetchone()[0] == 0:
         alap_normak = [
@@ -34,18 +21,15 @@ def init_db():
             ('41-001', 'Homlokzati csőállvány építése', 'm2', 1200, 0.6)
         ]
         c.executemany("INSERT INTO normak (kod, nev, egyseg, anyag, norma) VALUES (?,?,?,?,?)", alap_normak)
-    
     conn.commit()
     conn.close()
 
-# Adatbázis indítása
 init_db()
 
 # --- 2. OLDAL BEÁLLÍTÁSAI ---
 st.set_page_config(page_title="Digitális TERC Oktató", layout="wide", page_icon="🏗️")
-
 st.title("🏗️ Digitális TERC - Költségvetés Készítő")
-st.write("Oktatási verzió v3.0 | Műszaki és gazdasági számítások")
+st.write("Oktatási verzió v4.0 | Műszaki és gazdasági számítások")
 
 # --- 3. ÚJ TÉTEL HOZZÁADÁSA ---
 with st.expander("➕ ÚJ TÉTEL HOZZÁADÁSA A NORMA GYŰJTEMÉNYBE"):
@@ -58,12 +42,10 @@ with st.expander("➕ ÚJ TÉTEL HOZZÁADÁSA A NORMA GYŰJTEMÉNYBE"):
         with col2:
             uj_anyag = st.number_input("Anyag egységár (Ft)", min_value=0, value=1000)
             uj_norma = st.number_input("Normaidő (óra/egység)", min_value=0.0, value=1.0, step=0.1)
-        
         if st.form_submit_button("💾 Tétel mentése"):
-            conn = sqlite3.connect('terc_oktatas.db')
+            conn = sqlite3.connect('terc_vegleges.db')
             c = conn.cursor()
-            c.execute("INSERT INTO normak (kod, nev, egyseg, anyag, norma) VALUES (?,?,?,?,?)", 
-                      (uj_kod, uj_nev, uj_egyseg, uj_anyag, uj_norma))
+            c.execute("INSERT INTO normak (kod, nev, egyseg, anyag, norma) VALUES (?,?,?,?,?)", (uj_kod, uj_nev, uj_egyseg, uj_anyag, uj_norma))
             conn.commit()
             conn.close()
             st.success("Tétel elmentve!")
@@ -71,8 +53,7 @@ with st.expander("➕ ÚJ TÉTEL HOZZÁADÁSA A NORMA GYŰJTEMÉNYBE"):
 
 # --- 4. KÖLTSÉGVETÉS ÖSSZEÁLLÍTÁSA ---
 st.header("📋 Aktuális projekt összeállítása")
-
-conn = sqlite3.connect('terc_oktatas.db')
+conn = sqlite3.connect('terc_vegleges.db')
 normak_df = pd.read_sql_query("SELECT * FROM normak", conn)
 
 if not normak_df.empty:
@@ -81,7 +62,6 @@ if not normak_df.empty:
         kivalasztott_nev = st.selectbox("Válassz tételt a gyűjteményből:", normak_df['nev'].tolist())
     with col_b:
         mennyiseg = st.number_input("Mennyiség:", min_value=0.1, value=1.0, step=0.1)
-
     if st.button("📥 Hozzáadás a projekthez"):
         t_id = normak_df[normak_df['nev'] == kivalasztott_nev]['id'].values[0]
         c = conn.cursor()
@@ -92,33 +72,23 @@ conn.close()
 
 # --- 5. TÁBLÁZAT ÉS ÖSSZESÍTÉS ---
 st.subheader("📊 Projekt tételei")
-conn = sqlite3.connect('terc_oktatas.db')
-query = """
-SELECT n.kod, n.nev, p.mennyiseg, n.egyseg, n.anyag, n.norma,
-       (p.mennyiseg * n.anyag) as ossz_anyag,
-       (p.mennyiseg * n.norma) as ossz_munkaora
-FROM projekt_tetelek p
-JOIN normak n ON p.norma_id = n.id
-"""
+conn = sqlite3.connect('terc_vegleges.db')
+query = "SELECT n.kod, n.nev, p.mennyiseg, n.egyseg, n.anyag, n.norma, (p.mennyiseg * n.anyag) as ossz_anyag, (p.mennyiseg * n.norma) as ossz_munkaora FROM projekt_tetelek p JOIN normak n ON p.norma_id = n.id"
 projekt_df = pd.read_sql_query(query, conn)
 conn.close()
 
 if not projekt_df.empty:
     st.dataframe(projekt_df, use_container_width=True)
-    
     osszes_anyag = projekt_df['ossz_anyag'].sum()
     osszes_ora = projekt_df['ossz_munkaora'].sum()
-    
     c1, c2 = st.columns(2)
     c1.metric("Összes anyagköltség", f"{osszes_anyag:,.0f} Ft".replace(",", " "))
     c2.metric("Összes munkaidő szükséglet", f"{osszes_ora:.2f} óra")
-
     if st.button("🗑️ Projekt ürítése"):
-        conn = sqlite3.connect('terc_oktatas.db')
+        conn = sqlite3.connect('terc_vegleges.db')
         conn.execute("DELETE FROM projekt_tetelek")
         conn.commit()
         conn.close()
         st.rerun()
 else:
-    st.info("Még nincsenek tételek a projektben. Válassz a fenti listából!")
-
+    st.info("Még nincsenek tételek a projektben.")
