@@ -121,3 +121,31 @@ if not projekt_df.empty:
         st.rerun()
 else:
     st.info("Még nincsenek tételek a projektben.")
+
+if not projekt_df.empty:
+    st.subheader("📊 Projekt tételei")
+    st.dataframe(projekt_df, use_container_width=True)
+    
+    col_x, col_y = st.columns(2)
+    col_x.metric("Összes anyagköltség", f"{projekt_df['ossz_anyag'].sum():,.0f} Ft".replace(",", " "))
+    col_y.metric("Összes munkaóra", f"{projekt_df['ossz_munkaora'].sum():.2f} óra")
+    
+    # --- EXPORT GOMB ---
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+        projekt_df.to_excel(writer, index=False, sheet_name='Költségvetés')
+    
+    st.download_button(
+        label="📥 Költségvetés letöltése Excelben",
+        data=buffer.getvalue(),
+        file_name="terc_koltsegvetes.xlsx",
+        mime="application/vnd.ms-excel"
+    )
+    # ------------------
+
+    if st.button("🗑️ Projekt ürítése"):
+        conn = sqlite3.connect('terc_vegleges.db')
+        conn.execute("DELETE FROM projekt_tetelek")
+        conn.commit()
+        conn.close()
+        st.rerun()
