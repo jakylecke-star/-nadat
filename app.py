@@ -27,7 +27,7 @@ if c.fetchone()[0] == 0:
 conn.commit()
 
     # Ez a rész nézi meg, hogy üres-e a lista. Ha igen, beleírja az alapokat.
-    c.execute("SELECT count(*) FROM normagyujtemeny")
+c.execute("SELECT count(*) FROM normagyujtemeny")
     if c.fetchone()[0] == 0:
         alap_tetelek = [
             ('Falazás', '21-001', 'Vázkerámia falazóblokk 30-as', 'm2', 5500, 1.2),
