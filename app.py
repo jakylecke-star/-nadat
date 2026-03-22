@@ -1,7 +1,6 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
-from io import BytesIO
 import os
 
 # --- 1. ADATBÁZIS INICIALIZÁLÁSA ---
@@ -12,6 +11,7 @@ def init_db():
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, kod TEXT, nev TEXT, egyseg TEXT, anyag REAL, norma REAL)''')
     c.execute('''CREATE TABLE IF NOT EXISTS projekt_tetelek 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, norma_id INTEGER, mennyiseg REAL)''')
+    
     c.execute("SELECT count(*) FROM normak")
     if c.fetchone()[0] == 0:
         alap_normak = [
@@ -32,23 +32,32 @@ st.title("🏗️ Digitális TERC - Költségvetés Készítő")
 # --- 3. TÖMEGES FELTÖLTÉS ÉS ÚJ TÉTEL ---
 col_menu1, col_menu2 = st.columns(2)
 
-if feltoltott_fajl is not None:
+with col_menu1:
+    with st.expander("📥 TÖMEGES FELTÖLTÉS (Excel/CSV fájlból)"):
+        st.write("A fájl oszlopai: **kod, nev, egyseg, anyag, norma** (pontosvesszővel elválasztva)")
+        feltoltott_fajl = st.file_uploader("Válassz ki egy CSV fájlt", type="csv")
+        
+        # Ez a rész lett javítva, hogy ne legyen NameError
+        if feltoltott_fajl is not None:
             try:
-                # Beolvassuk a CSV-t
+                # Beolvassuk és rögtön szűrjük az oszlopokat
                 df = pd.read_csv(feltoltott_fajl, sep=";")
-                
-                # CSAK a nekünk kellő oszlopokat tartjuk meg, a többit eldobjuk
                 kell_oszlopok = ['kod', 'nev', 'egyseg', 'anyag', 'norma']
-                uj_adatok = df[kell_oszlopok].copy()
                 
-                if st.button("🚀 Importálás indítása"):
-                    conn = sqlite3.connect('terc_vegleges.db')
-                    uj_adatok.to_sql('normak', conn, if_exists='append', index=False)
-                    conn.close()
-                    st.success(f"Sikeresen hozzáadva {len(uj_adatok)} új tétel!")
-                    st.rerun()
+                # Ellenőrizzük, megvannak-e a szükséges oszlopok
+                if all(col in df.columns for col in kell_oszlopok):
+                    uj_adatok = df[kell_oszlopok].copy()
+                    
+                    if st.button("🚀 Importálás indítása"):
+                        conn = sqlite3.connect('terc_vegleges.db')
+                        uj_adatok.to_sql('normak', conn, if_exists='append', index=False)
+                        conn.close()
+                        st.success(f"Sikeresen hozzáadva {len(uj_adatok)} új tétel!")
+                        st.rerun()
+                else:
+                    st.error("A CSV fájl oszlopnevei nem megfelelőek! Használd a kért fejlécet.")
             except Exception as e:
-                st.error(f"Hiba: {e}")
+                st.error(f"Hiba a fájl feldolgozásakor: {e}")
 
 with col_menu2:
     with st.expander("➕ EGYEDI TÉTEL HOZZÁADÁSA"):
@@ -86,7 +95,13 @@ if not normak_df.empty:
             st.rerun()
 
 # --- 5. TÁBLÁZAT ÉS ÖSSZESÍTÉS ---
-query = "SELECT n.kod, n.nev, p.mennyiseg, n.egyseg, n.anyag, n.norma, (p.mennyiseg * n.anyag) as ossz_anyag, (p.mennyiseg * n.norma) as ossz_munkaora FROM projekt_tetelek p JOIN normak n ON p.norma_id = n.id"
+query = """
+SELECT n.kod, n.nev, p.mennyiseg, n.egyseg, n.anyag, n.norma, 
+       (p.mennyiseg * n.anyag) as ossz_anyag, 
+       (p.mennyiseg * n.norma) as ossz_munkaora 
+FROM projekt_tetelek p 
+JOIN normak n ON p.norma_id = n.id
+"""
 projekt_df = pd.read_sql_query(query, conn)
 conn.close()
 
@@ -104,3 +119,5 @@ if not projekt_df.empty:
         conn.commit()
         conn.close()
         st.rerun()
+else:
+    st.info("Még nincsenek tételek a projektben.")
