@@ -5,11 +5,25 @@ from io import BytesIO
 import os
 
 # --- 1. ADATBÁZIS KEZELÉS ---
-conn = sqlite3.connect('terc_oktatas.db', check_same_thread=False)
-c = conn.cursor()
-c.execute('CREATE TABLE IF NOT EXISTS normak (id INTEGER PRIMARY KEY, kod TEXT, nev TEXT, egyseg TEXT, anyag REAL, munka REAL, kategoria TEXT)')
-c.execute('CREATE TABLE IF NOT EXISTS projekt_tetelek (id INTEGER PRIMARY KEY, norma_id INTEGER, mennyiseg REAL)')
-conn.commit()
+def init_db():
+    conn = sqlite3.connect('terc.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS normagyujtemeny
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, szakag TEXT, tetelszam TEXT, megnevezes TEXT, egyseg TEXT, anyag_ar REAL, normatido REAL)''')
+
+    # Ez a rész nézi meg, hogy üres-e a lista. Ha igen, beleírja az alapokat.
+    c.execute("SELECT count(*) FROM normagyujtemeny")
+    if c.fetchone()[0] == 0:
+        alap_tetelek = [
+            ('Falazás', '21-001', 'Vázkerámia falazóblokk 30-as', 'm2', 5500, 1.2),
+            ('Betonozás', '11-002', 'Aljzatbeton készítése C16/20', 'm3', 32000, 2.5),
+            ('Festés', '33-005', 'Belső falfelület festése diszperziós festékkel', 'm2', 850, 0.4),
+            ('Állványozás', '41-001', 'Homlokzati csőállvány építése', 'm2', 1200, 0.6)
+        ]
+        c.executemany("INSERT INTO normagyujtemeny (szakag, tetelszam, megnevezes, egyseg, anyag_ar, normatido) VALUES (?,?,?,?,?,?)", alap_tetelek)
+
+    conn.commit()
+    conn.close()
 
 # --- 2. OLDAL BEÁLLÍTÁSAI ---
 st.set_page_config(page_title="Digitális TERC Oktató", layout="wide", page_icon="🏗️")
